@@ -1,0 +1,37 @@
+# Unreal Engine 5 .gitignore
+
+# Build artifacts
+Binaries/
+Build/
+DerivedDataCache/
+Intermediate/
+Saved/
+
+# Logs and temporary files
+*.log
+*.tmp
+*.bak
+
+# Visual Studio files
+.vs/
+*.VC.db
+*.VC.opendb
+*.VC.suo
+*.VC.user
+*.VC.filters
+*.VC.vcxproj.user
+*.VC.vcxproj.filters
+
+# Rider files
+.idea/
+
+# Mac OS files
+.DS_Store
+
+# External Actors (if not using externalized actors for collaborative work)
+# If you are using externalized actors for collaborative work on maps,
+# you might want to consider versioning the __ExternalActors__ folder.
+# __ExternalActors__/
+
+# Crash reports
+CrashReportClient/
