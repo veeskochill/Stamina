@@ -35,3 +35,10 @@ Saved/
 
 # Crash reports
 CrashReportClient/
+/Content/__ExternalActors__
+/Content/__ExternalObjects__
+/Content/Characters
+/Content/LevelPrototyping
+/Content/StarterContent
+/Content/ThirdPerson
+/enc_temp_folder
