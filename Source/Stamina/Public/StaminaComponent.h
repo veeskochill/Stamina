@@ -23,16 +23,16 @@ public:
 	UStaminaComponent();
 
 	UFUNCTION(Server, Reliable, BlueprintCallable)
-	void Server_TryUseStamina(float staminaAsk, const FGuid& EventId);
+	void Server_TryUseStamina(float StaminaCost, const FGuid& EventId);
 
 	UFUNCTION(Server, Reliable, BlueprintCallable)
-	void Server_TryStartUseStamina(float staminaBurnRate, const FGuid& EventId);
+	void Server_TryStartUseStamina(float BurnRate, const FGuid& EventId);
 
 	UFUNCTION(Server, Reliable, BlueprintCallable)
 	void Server_StopUseStamina();
 
-	UFUNCTION(BlueprintCallable)
-	float GetStaminaRemaining();
+	UFUNCTION(BlueprintPure)
+	float GetStaminaRemaining() const;
 
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
 	TSubclassOf<UUserWidget> UIWidgetClass;
@@ -46,17 +46,17 @@ public:
 
 protected:
 
-	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite,	Category = "Config")
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly,	Category = "Config", meta = (ClampMin = "0.0", UIMin = "0.0"))
 	float RegenRate = 0.1f;
 
-	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Config")
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Config", meta = (ClampMin = "0.0", UIMin = "0.0"))
 	float RegenDelay = 1.0f;
 
-	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Config")
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Config", meta = (ClampMin = "0.1", UIMin = "0.1"))
 	float MaxStamina = 100.0f;
 
 	// Small tolerance to prevent excessive tiny-network updates
-	UPROPERTY(EditDefaultsOnly, BlueprintReadWrite, Category = "Networking")
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Networking", meta = (ClampMin = "0.0", UIMin = "0.0"))
 	float BroadcastEpsilon = 0.01f;
 
 
@@ -75,17 +75,14 @@ private:
 
 	void RecoveryComplete();
 
-	AActor* GetStaminaOwner();
-	UWorld* GetStaminaWorld();
-
-
 	UPROPERTY(ReplicatedUsing = OnRep_Stamina)
 	float CurrentStamina = 0.0f;
 
-	UUserWidget* UIWidgetInstance;
+	UPROPERTY(Transient)
+	TObjectPtr<UUserWidget> UIWidgetInstance;
 
-	bool IsBurningStamina = false;
-	bool IsRegenStamina = false;
+	bool bIsBurningStamina = false;
+	bool bIsRegenStamina = false;
 	float StaminaBurnRate = 0.0f;
 	FTimerHandle FRecoveryTimerHandle;
 

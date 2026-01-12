@@ -2,34 +2,8 @@
 
 
 #include "StaminaComponent.h"
-#include "Misc/DateTime.h"
 #include "Blueprint/UserWidget.h"
 #include "Net/UnrealNetwork.h"
-
-AActor* UStaminaComponent::GetStaminaOwner() {
-	AActor* Owner = GetOwner();
-#if !UE_BUILD_SHIPPING
-	if (!Owner)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("UStaminaComponent - Owner is null"));
-		return nullptr;
-	}
-#endif
-	return Owner;
-}
-
-UWorld* UStaminaComponent::GetStaminaWorld() {
-	UWorld* World = GetWorld();
-#if !UE_BUILD_SHIPPING
-	if (!World) 
-	{
-		UE_LOG(LogTemp, Warning, TEXT("UStaminaComponent - World is null"));
-		return nullptr;
-	}
-	#endif
-	return World;
-}
-
 
 // Sets default values for this component's properties
 UStaminaComponent::UStaminaComponent()
@@ -44,13 +18,14 @@ void UStaminaComponent::BeginPlay()
 {
 	Super::BeginPlay();
 
-	AActor* Owner = GetStaminaOwner();
+	AActor* Owner = GetOwner();
 	if (!Owner)
 	{
 		return;
 	}
 
-	if (Owner->HasAuthority()) {
+	if (Owner->HasAuthority()) 
+	{
 		CurrentStamina = MaxStamina;
 	}
 
@@ -58,36 +33,35 @@ void UStaminaComponent::BeginPlay()
 	if (Owner->GetLocalRole() == ROLE_AutonomousProxy || GetNetMode() == NM_Standalone) 
 	{
 		UWorld* World = GetWorld();
-		if (!World || !UIWidgetClass || UIWidgetInstance) {
+		check(World);
+
+		if (!UIWidgetClass || UIWidgetInstance) 
+		{
 			return;
 		}
-		UIWidgetInstance = CreateWidget<UUserWidget>(World, UIWidgetClass);
-		if (UIWidgetInstance) {
-			UIWidgetInstance->AddToViewport();
+
+		if (APawn* OwnerPawn = Cast<APawn>(Owner))
+		{
+			if (APlayerController* PlayerController = Cast<APlayerController>(OwnerPawn->GetController()))
+			{
+				UIWidgetInstance = CreateWidget<UUserWidget>(PlayerController, UIWidgetClass);
+				if (UIWidgetInstance) 
+				{
+					UIWidgetInstance->AddToViewport();
+				}
+			}
 		}
 	}
 }
-
 
 //Clean up stamina widget
 void UStaminaComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	Super::EndPlay(EndPlayReason);
 
-	if (!UIWidgetInstance) 
+	if (UIWidgetInstance && IsValid(UIWidgetInstance))
 	{
-		return;
-	}
-
-	AActor* Owner = GetStaminaOwner();
-	if (!Owner)
-	{
-		return;
-	}
-	
-	if (Owner->GetLocalRole() == ROLE_AutonomousProxy || GetNetMode() == NM_Standalone)
-	{
-		UIWidgetInstance->RemoveFromViewport();
+		UIWidgetInstance->RemoveFromParent();
 		UIWidgetInstance = nullptr;
 	}
 }
@@ -97,7 +71,7 @@ void UStaminaComponent::TickComponent(float DeltaTime, ELevelTick TickType, FAct
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
-	AActor* Owner = GetStaminaOwner();
+	AActor* Owner = GetOwner();
 	if (!Owner)
 	{
 		return;
@@ -109,27 +83,27 @@ void UStaminaComponent::TickComponent(float DeltaTime, ELevelTick TickType, FAct
 	}
 
 
-	if (IsBurningStamina )
+	if (bIsBurningStamina )
 	{
 		if (CurrentStamina > 0.0f) 
 		{
 			const float OldStamina = CurrentStamina;
-			const float NewStamina = FMath::Clamp(CurrentStamina - StaminaBurnRate * DeltaTime, 0.0f, MaxStamina);
+			float NewStamina = CurrentStamina - StaminaBurnRate * DeltaTime;
+			if(NewStamina < 0.0f){
+				NewStamina = 0.0f;
+				bIsBurningStamina = false;
+				SetComponentTickEnabled(false);
+			}
+
 			CurrentStamina = NewStamina;
 			if (!FMath::IsNearlyEqual(OldStamina, CurrentStamina, BroadcastEpsilon))
 			{
 				OnStaminaChanged.Broadcast(CurrentStamina); // Server side events
 			}
 		}
-		// Use IsNearlyZero check to avoid exact float comparisons
-		if (FMath::IsNearlyZero(CurrentStamina, KINDA_SMALL_NUMBER))
-		{
-			IsBurningStamina = false;
-			SetComponentTickEnabled(false);
-		}
 	}
 
-	if (IsRegenStamina)
+	if (bIsRegenStamina)
 	{
 		const float OldStamina = CurrentStamina;
 		const float NewStamina = FMath::Clamp(OldStamina + RegenRate * DeltaTime, 0.0f, MaxStamina);
@@ -139,39 +113,44 @@ void UStaminaComponent::TickComponent(float DeltaTime, ELevelTick TickType, FAct
 		{
 			OnStaminaChanged.Broadcast(CurrentStamina); // Server side events
 		}
-		if (CurrentStamina >= MaxStamina - KINDA_SMALL_NUMBER)
+		if (CurrentStamina >= MaxStamina) 
 		{
+			CurrentStamina = MaxStamina;
 			SetComponentTickEnabled(false);
-			IsRegenStamina = false;
+			bIsRegenStamina = false;
 		}
 	}
 }
 
 
 //Wait time after burning stamina is done, we can now start regeneration
-void UStaminaComponent::RecoveryComplete() {
-	IsRegenStamina = true;
-	SetComponentTickEnabled(true);
-}
-
-void UStaminaComponent::Server_TryUseStamina_Implementation(float staminaAsk, const FGuid& EventId)
+void UStaminaComponent::RecoveryComplete() 
 {
-	AActor* Owner = GetStaminaOwner();
+
+	AActor* Owner = GetOwner();
 	if (!Owner || !Owner->HasAuthority())
 	{
 		return;
 	}
 
-	if (CurrentStamina >= staminaAsk) {
+	if (!bIsBurningStamina)
+	{
+		bIsRegenStamina = true;
+		SetComponentTickEnabled(true);
+	}
+}
+
+void UStaminaComponent::Server_TryUseStamina_Implementation(float StaminaCost, const FGuid& EventId)
+{
+	if (CurrentStamina >= StaminaCost) 
+	{
 		Client_StaminaUseResult(true, EventId);
-		CurrentStamina -= staminaAsk;
+		CurrentStamina -= StaminaCost;
 
 		OnStaminaChanged.Broadcast(CurrentStamina); //Server side events
 		UWorld* World = GetWorld();
-		if (World)
-		{
-			World->GetTimerManager().SetTimer(FRecoveryTimerHandle, this, &UStaminaComponent::RecoveryComplete, RegenDelay, false);
-		}
+		check(World);
+		World->GetTimerManager().SetTimer(FRecoveryTimerHandle, this, &UStaminaComponent::RecoveryComplete, RegenDelay, false);
 	}
 	else
 	{
@@ -179,23 +158,23 @@ void UStaminaComponent::Server_TryUseStamina_Implementation(float staminaAsk, co
 	}
 }
 
-void UStaminaComponent::Server_TryStartUseStamina_Implementation(float staminaBurnRate, const FGuid& EventId) {
-
-	if (CurrentStamina <= 0.0f) {
+void UStaminaComponent::Server_TryStartUseStamina_Implementation(float BurnRate, const FGuid& EventId) 
+{
+	if (CurrentStamina <= 0.0f) 
+	{
 		Client_StaminaUseResult(false, EventId);
 		return;
 
 	}
-	StaminaBurnRate = staminaBurnRate;
-	IsBurningStamina = true;
+	StaminaBurnRate = BurnRate;
+	bIsBurningStamina = true;
 	SetComponentTickEnabled(true);
 	Client_StaminaUseResult(true, EventId);
 
+	bIsRegenStamina = false;
 	UWorld* World = GetWorld();
-	if (World)
-	{
-		World->GetTimerManager().ClearTimer(FRecoveryTimerHandle);
-	}
+	check(World);
+	World->GetTimerManager().ClearTimer(FRecoveryTimerHandle);
 }
 
 //Notify the client if the action succeeds or fails with the appropriate handle (EventId)
@@ -212,18 +191,17 @@ void UStaminaComponent::Client_StaminaUseResult_Implementation(bool bSuccess, co
 }
 
 //We are requiring that the user stop trying to use stamina before we allow the recovery timer to start
-void UStaminaComponent::Server_StopUseStamina_Implementation() {
+void UStaminaComponent::Server_StopUseStamina_Implementation() 
+{
 	StaminaBurnRate = 0.0f;
-	IsBurningStamina = false;
+	bIsBurningStamina = false;
 	SetComponentTickEnabled(false);
 	UWorld* World = GetWorld();
-	if (World)
-	{
-		World->GetTimerManager().SetTimer(FRecoveryTimerHandle, this, &UStaminaComponent::RecoveryComplete, RegenDelay, false);
-	}
+	check(World);
+	World->GetTimerManager().SetTimer(FRecoveryTimerHandle, this, &UStaminaComponent::RecoveryComplete, RegenDelay, false);
 }
 
-float UStaminaComponent::GetStaminaRemaining() 
+float UStaminaComponent::GetStaminaRemaining() const
 {
 	return CurrentStamina;
 }
