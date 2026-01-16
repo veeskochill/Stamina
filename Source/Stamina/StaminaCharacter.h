@@ -5,7 +5,10 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "Logging/LogMacros.h"
+#include "AbilitySystemInterface.h"
+
 #include "StaminaCharacter.generated.h"
+
 
 class USpringArmComponent;
 class UCameraComponent;
@@ -16,7 +19,7 @@ struct FInputActionValue;
 DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
 
 UCLASS(config=Game)
-class AStaminaCharacter : public ACharacter
+class AStaminaCharacter : public ACharacter, public IAbilitySystemInterface
 {
 	GENERATED_BODY()
 
@@ -45,7 +48,17 @@ class AStaminaCharacter : public ACharacter
 	UInputAction* LookAction;
 
 public:
-	AStaminaCharacter();
+
+	AStaminaCharacter(const FObjectInitializer& ObjectInitializer);
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "AbilitySystem")
+	class UCharacterAttributeSet* CharacterAttributeSet;
+
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "AbilitySystem")
+	class UAbilitySystemComponent* AbilitySystemComponent;
+
+	virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override;
 	
 
 protected:
@@ -55,6 +68,10 @@ protected:
 
 	/** Called for looking input */
 	void Look(const FInputActionValue& Value);
+
+	void PossessedBy(AController* NewController) override;
+
+	void OnRep_PlayerState() override;
 			
 
 protected:

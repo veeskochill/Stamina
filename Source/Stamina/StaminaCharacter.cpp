@@ -11,16 +11,54 @@
 #include "EnhancedInputSubsystems.h"
 #include "InputActionValue.h"
 
+#include "StaminaMovementComponent.h"
+
+#include "CharacterAttributeSet.h"
+
+#include "AbilitySystemComponent.h"
+
+
 DEFINE_LOG_CATEGORY(LogTemplateCharacter);
 
 //////////////////////////////////////////////////////////////////////////
 // AStaminaCharacter
 
-AStaminaCharacter::AStaminaCharacter()
+UAbilitySystemComponent* AStaminaCharacter::GetAbilitySystemComponent() const
 {
+	return AbilitySystemComponent;
+}
+
+void AStaminaCharacter::PossessedBy(AController* NewController)
+{
+	Super::PossessedBy(NewController);
+
+	if(GetAbilitySystemComponent()){
+		AbilitySystemComponent->InitAbilityActorInfo(this, this);
+	}
+}
+
+void AStaminaCharacter::OnRep_PlayerState() 
+{
+	Super::OnRep_PlayerState();
+	if(GetAbilitySystemComponent()){
+		AbilitySystemComponent->InitAbilityActorInfo(this, this);
+	}
+}
+
+AStaminaCharacter::AStaminaCharacter(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer.SetDefaultSubobjectClass<UStaminaMovementComponent>(
+		ACharacter::CharacterMovementComponentName))
+{
+
+	AbilitySystemComponent = CreateDefaultSubobject<UAbilitySystemComponent>(TEXT("AbilitySystemComponent"));
+	AbilitySystemComponent->SetIsReplicated(true);
+	AbilitySystemComponent->SetReplicationMode(EGameplayEffectReplicationMode::Mixed);
+
+	CharacterAttributeSet = CreateDefaultSubobject<UCharacterAttributeSet>(TEXT("CharacterAttributeSet"));
+
 	// Set size for collision capsule
 	GetCapsuleComponent()->InitCapsuleSize(42.f, 96.0f);
-		
+
 	// Don't rotate when the controller rotates. Let that just affect the camera.
 	bUseControllerRotationPitch = false;
 	bUseControllerRotationYaw = false;
@@ -53,6 +91,13 @@ AStaminaCharacter::AStaminaCharacter()
 	// Note: The skeletal mesh and anim blueprint references on the Mesh component (inherited from Character) 
 	// are set in the derived blueprint asset named ThirdPersonCharacter (to avoid direct content references in C++)
 }
+/*
+AStaminaCharacter::AStaminaCharacter()
+{
+
+	
+}
+*/
 
 void AStaminaCharacter::BeginPlay()
 {
